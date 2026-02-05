@@ -741,6 +741,151 @@ class NEGFSolver:
 
         return I_bond
 
+    def export_hamiltonian(self, filename: str = "hamiltonian.npz",
+                           format: str = "npz") -> dict:
+        """
+        Export the Hamiltonian matrix to file and return matrix info.
+
+        The Hamiltonian for NEGF is constructed using effective mass approximation
+        with finite difference discretization, resulting in a tri-diagonal matrix:
+
+        H = | 2t+V₀    -t      0    ...  |
+            |  -t    2t+V₁    -t    ...  |
+            |   0      -t   2t+V₂   ...  |
+            |  ...    ...    ...    ...  |
+
+        where t = ℏ²/(2m*Δz²) is the hopping parameter.
+
+        Args:
+            filename: Output filename (without extension for some formats)
+            format: Output format - "npz", "csv", "txt", or "mat"
+
+        Returns:
+            Dictionary with Hamiltonian info (size, sparsity, eigenvalues, etc.)
+        """
+        if self.H is None:
+            raise ValueError("Hamiltonian not built. Call build_hamiltonian first.")
+
+        H = self.H
+        n = H.shape[0]
+
+        # Calculate matrix properties
+        eigenvalues = np.linalg.eigvalsh(H.real)  # For Hermitian matrix
+        sparsity = np.sum(np.abs(H) < 1e-10) / H.size * 100
+
+        info = {
+            'size': H.shape,
+            'n_elements': H.size,
+            'n_nonzero': np.sum(np.abs(H) > 1e-10),
+            'sparsity_percent': sparsity,
+            'is_hermitian': np.allclose(H, H.T.conj()),
+            'diagonal_range': (H.diagonal().real.min(), H.diagonal().real.max()),
+            'off_diagonal': H[0, 1] if n > 1 else None,
+            'eigenvalue_range': (eigenvalues.min(), eigenvalues.max()),
+            'bandwidth': self._calculate_bandwidth(),
+        }
+
+        # Export based on format
+        if format == "npz":
+            np.savez(filename,
+                     H_real=H.real,
+                     H_imag=H.imag,
+                     z_grid=self.z,
+                     params=str(self.params))
+            info['filename'] = filename
+
+        elif format == "csv":
+            # Save real and imaginary parts separately
+            np.savetxt(f"{filename}_real.csv", H.real, delimiter=',', fmt='%.10e')
+            np.savetxt(f"{filename}_imag.csv", H.imag, delimiter=',', fmt='%.10e')
+            info['filename'] = f"{filename}_real.csv, {filename}_imag.csv"
+
+        elif format == "txt":
+            with open(filename, 'w') as f:
+                f.write(f"# Hamiltonian Matrix for GAA Transistor NEGF\n")
+                f.write(f"# Size: {n} x {n}\n")
+                f.write(f"# Grid points (nz): {self.params.nz}\n")
+                f.write(f"# Channel length: {self.params.channel_length*1e9:.2f} nm\n")
+                f.write(f"# Grid spacing: {self.dz*1e9:.4f} nm\n")
+                f.write(f"# Hopping parameter t: {-H[0,1].real:.6f} eV\n")
+                f.write(f"#\n")
+                f.write(f"# Matrix (real part):\n")
+                for i in range(n):
+                    row = ' '.join([f"{H[i,j].real:12.6f}" for j in range(n)])
+                    f.write(row + '\n')
+            info['filename'] = filename
+
+        elif format == "mat":
+            try:
+                from scipy.io import savemat
+                savemat(filename, {'H_real': H.real, 'H_imag': H.imag,
+                                   'z_grid': self.z})
+                info['filename'] = filename
+            except ImportError:
+                print("scipy not available for .mat export, using .npz instead")
+                np.savez(filename.replace('.mat', '.npz'),
+                         H_real=H.real, H_imag=H.imag, z_grid=self.z)
+                info['filename'] = filename.replace('.mat', '.npz')
+
+        return info
+
+    def _calculate_bandwidth(self) -> int:
+        """Calculate the bandwidth of the Hamiltonian matrix."""
+        if self.H is None:
+            return 0
+        n = self.H.shape[0]
+        bandwidth = 0
+        for i in range(n):
+            for j in range(n):
+                if np.abs(self.H[i, j]) > 1e-10:
+                    bandwidth = max(bandwidth, abs(i - j))
+        return bandwidth
+
+    def print_hamiltonian_info(self):
+        """Print detailed information about the Hamiltonian matrix."""
+        if self.H is None:
+            print("Hamiltonian not built yet.")
+            return
+
+        H = self.H
+        n = H.shape[0]
+        p = self.params
+        m_eff = p.material.effective_mass * M_E
+        t = (HBAR**2 / (2 * m_eff * self.dz**2)) / Q_E
+
+        print("\n" + "=" * 50)
+        print("Hamiltonian Matrix Information")
+        print("=" * 50)
+        print(f"Matrix size: {n} × {n}")
+        print(f"Total elements: {n*n}")
+        print(f"Non-zero elements: {np.sum(np.abs(H) > 1e-10)}")
+        print(f"Sparsity: {np.sum(np.abs(H) < 1e-10) / H.size * 100:.1f}%")
+        print(f"Bandwidth: {self._calculate_bandwidth()}")
+        print(f"\nPhysical parameters:")
+        print(f"  Grid points (nz): {p.nz}")
+        print(f"  Grid spacing Δz: {self.dz*1e9:.4f} nm")
+        print(f"  Effective mass: {p.material.effective_mass} m_e")
+        print(f"  Hopping parameter t: {t:.6f} eV")
+        print(f"\nMatrix elements:")
+        print(f"  Diagonal (2t + V): [{H.diagonal().real.min():.4f}, {H.diagonal().real.max():.4f}] eV")
+        print(f"  Off-diagonal (-t): {H[0,1].real:.4f} eV")
+        print(f"  Is Hermitian: {np.allclose(H, H.T.conj())}")
+
+        # Show matrix structure (first 8x8 block)
+        print(f"\nMatrix structure (first {min(8,n)}×{min(8,n)} block):")
+        print("-" * 50)
+        block_size = min(8, n)
+        for i in range(block_size):
+            row = ""
+            for j in range(block_size):
+                val = H[i, j].real
+                if abs(val) < 1e-10:
+                    row += "   .   "
+                else:
+                    row += f"{val:7.3f}"
+            print(row)
+        print("=" * 50)
+
 
 class PoissonSolver:
     """
