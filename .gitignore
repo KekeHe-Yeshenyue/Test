@@ -7,3 +7,8 @@ __pycache__/
 dist/
 build/
 *.png
+# Generated Hamiltonian files
+hamiltonian*.npz
+hamiltonian*.txt
+hamiltonian*.csv
+hamiltonian*.mat
