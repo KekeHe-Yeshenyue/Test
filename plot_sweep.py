@@ -12,7 +12,16 @@ Usage:
 
 import os
 import sys
+import platform
 import numpy as np
+import matplotlib
+if platform.system() == 'Darwin':
+    for backend in ['macosx', 'TkAgg', 'Qt5Agg']:
+        try:
+            matplotlib.use(backend)
+            break
+        except Exception:
+            continue
 import matplotlib.pyplot as plt
 
 
@@ -170,7 +179,8 @@ def plot_sweep(filepath):
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     print(f"Plot saved to: {output_path}")
 
-    plt.show()
+    plt.show(block=True)
+    print("Plot window closed.")
     return data
 
 
