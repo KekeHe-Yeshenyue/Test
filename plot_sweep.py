@@ -12,6 +12,14 @@ Usage:
 
 import os
 import sys
+
+if sys.version_info[0] < 3:
+    sys.stderr.write(
+        "ERROR: This script requires Python 3.5 or newer. "
+        "You are running Python {}.{}.\n".format(sys.version_info[0], sys.version_info[1])
+    )
+    sys.exit(1)
+
 import platform
 import numpy as np
 import matplotlib
@@ -60,7 +68,7 @@ def parse_sweep_file(filepath):
         data: numpy array of shape (n_rows, n_cols)
     """
     if not os.path.isfile(filepath):
-        raise FileNotFoundError(f"Data file not found: {filepath}")
+        raise FileNotFoundError("Data file not found: {}".format(filepath))
 
     headers = None
     data_lines = []
@@ -102,7 +110,7 @@ def parse_sweep_file(filepath):
                     continue
 
     if not data_lines:
-        raise ValueError(f"No numeric data found in {filepath}")
+        raise ValueError("No numeric data found in {}".format(filepath))
 
     # Ensure all rows have the same number of columns
     n_cols = len(data_lines[0])
@@ -114,11 +122,11 @@ def parse_sweep_file(filepath):
 
 def plot_sweep(filepath):
     """Read sweep data and plot the line curve."""
-    print(f"Reading data from: {filepath}")
+    print("Reading data from: {}".format(filepath))
     headers, data = parse_sweep_file(filepath)
 
     n_rows, n_cols = data.shape
-    print(f"Loaded {n_rows} data points with {n_cols} columns")
+    print("Loaded {} data points with {} columns".format(n_rows, n_cols))
 
     x = data[:, 0]
     y = data[:, 1]
@@ -149,7 +157,7 @@ def plot_sweep(filepath):
         # Log scale plot
         ax2.semilogy(x, y_abs, 'r-o', linewidth=2, markersize=5)
         ax2.set_xlabel(xlabel, fontsize=12)
-        ax2.set_ylabel(f"|{ylabel}|", fontsize=12)
+        ax2.set_ylabel("|{}|".format(ylabel), fontsize=12)
         ax2.set_title("Sweep Curve (Log Scale)", fontsize=13)
         ax2.grid(True, which='both', alpha=0.3)
 
@@ -166,7 +174,7 @@ def plot_sweep(filepath):
     # If there are more columns, plot them too
     if n_cols > 2:
         for col_idx in range(2, n_cols):
-            label = headers[col_idx] if headers and len(headers) > col_idx else f"Column {col_idx+1}"
+            label = headers[col_idx] if headers and len(headers) > col_idx else "Column {}".format(col_idx + 1)
             ax1.plot(x, data[:, col_idx], '-o', linewidth=2, markersize=5, label=label)
         ax1.legend()
 
@@ -175,9 +183,9 @@ def plot_sweep(filepath):
     # Save the figure
     output_dir = os.path.dirname(filepath)
     base_name = os.path.splitext(os.path.basename(filepath))[0]
-    output_path = os.path.join(output_dir, f"{base_name}_plot.png")
+    output_path = os.path.join(output_dir, "{}_plot.png".format(base_name))
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    print(f"Plot saved to: {output_path}")
+    print("Plot saved to: {}".format(output_path))
 
     plt.show(block=True)
     print("Plot window closed.")
