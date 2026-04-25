@@ -18,16 +18,22 @@ import matplotlib.pyplot as plt
 
 def find_default_data_file():
     """Locate the default data file on Desktop."""
+    # Hard-coded path for the user's macOS machine
+    mac_path = "/Users/bmy/Desktop/Data needed to be processed/test SWEEP.txt"
+    if os.path.isfile(mac_path):
+        return mac_path
+
     home = os.path.expanduser("~")
     default = os.path.join(home, "Desktop", "Data needed to be processed", "test SWEEP.txt")
     if os.path.isfile(default):
         return default
+
     # Fallback: search common home directories
-    for base in ["/home/user", os.path.expanduser("~")]:
+    for base in ["/Users/bmy", "/home/user", os.path.expanduser("~")]:
         candidate = os.path.join(base, "Desktop", "Data needed to be processed", "test SWEEP.txt")
         if os.path.isfile(candidate):
             return candidate
-    return default
+    return mac_path
 
 
 def parse_sweep_file(filepath):
